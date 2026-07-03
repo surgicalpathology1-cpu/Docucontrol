@@ -95,3 +95,62 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="ml-2 text-muted-foreground">Loading PDF...</span>
             </div>
+          )}
+
+          {error && (
+            <div className="flex items-center justify-center h-full text-center px-8">
+              <p className="text-muted-foreground">{error}</p>
+            </div>
+          )}
+
+          {pdfUrl && !loading && (
+            <iframe
+              src={pdfUrl}
+              className="w-full"
+              style={{ height: '150%', minHeight: '800px' }}
+              title={document?.title ?? 'Document'}
+            />
+          )}
+
+          {!scrolledToBottom && pdfUrl && (
+            <div className="sticky bottom-4 flex justify-center pointer-events-none">
+              <div className="bg-primary/90 text-primary-foreground text-xs px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
+                <ChevronDown className="h-3 w-3 animate-bounce" />
+                Scroll to bottom to enable signing
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t px-6 py-4 bg-muted/30">
+          {signed ? (
+            <div className="flex items-center justify-center gap-2 text-green-600 py-2">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-medium">Document signed successfully!</span>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <p className="text-xs text-muted-foreground flex-1">
+                By clicking Sign, I attest that I have read, understood, and agree to abide by this policy.
+              </p>
+              <Button
+                onClick={handleSign}
+                disabled={!scrolledToBottom || signing || !!error}
+                className="shrink-0"
+              >
+                {signing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing...
+                  </>
+                ) : (
+                  'Sign Document'
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

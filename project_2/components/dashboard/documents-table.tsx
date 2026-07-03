@@ -51,18 +51,14 @@ const map: Record<string, { label: string; className: string; icon: any }> = {
 function sigStatus(doc: Document, sigs: Signature[], required: DocumentRequiredSigner[]) {
   const isRequired = required.some((r) => r.document_id === doc.id);
   const mySig = sigs.find((s) => s.document_id === doc.id);
-  if (mySig?.status === 'signed') {
+  if (mySig) {
     return { label: 'Signed', className: 'bg-success/10 text-success', icon: CheckCircle2 };
-  }
-  if (mySig?.status === 'rejected') {
-    return { label: 'Rejected', className: 'bg-destructive/10 text-destructive', icon: XCircle };
   }
   if (isRequired) {
     return { label: 'Pending your signature', className: 'bg-accent/10 text-accent', icon: PenLine };
   }
   return { label: 'Not required', className: 'bg-muted text-muted-foreground', icon: FileText };
 }
-
 const filterLabels: Record<DocFilter, string> = {
   all: 'All Documents',
   expired: 'Expired Documents',

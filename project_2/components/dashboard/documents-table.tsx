@@ -168,7 +168,7 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
                 </TableHeader>
                 <TableBody>
                   {visible.map((doc) => {
-                    const sig = sigStatus(doc, mySignatures, requiredSigners);
+                    const sig = sigStatus(doc, mySignatures, requiredSigners) ?? { label: 'Not required', className: 'bg-muted text-muted-foreground', icon: FileText };
                     const SigIcon = sig.icon;
                     const canSign = sig.label === 'Pending your signature';
                     return (

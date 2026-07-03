@@ -31,11 +31,13 @@ interface DocumentsTableProps {
 }
 
 function statusBadge(status: Document['status']) {
-  const map = {
+const map: Record<string, { label: string; className: string; icon: any }> = {
     active: { label: 'Active', className: 'bg-success/10 text-success', icon: CheckCircle2 },
     expired: { label: 'Expired', className: 'bg-destructive/10 text-destructive', icon: XCircle },
     under_review: { label: 'Under Review', className: 'bg-warning/10 text-warning', icon: Clock },
-  } as const;
+    draft: { label: 'Draft', className: 'bg-muted/10 text-muted-foreground', icon: Clock },
+    archived: { label: 'Archived', className: 'bg-muted/10 text-muted-foreground', icon: Clock },
+  };
   const cfg = map[status] ?? map['active'];
   const Icon = cfg.icon;
   return (

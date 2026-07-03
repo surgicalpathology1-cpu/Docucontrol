@@ -24,13 +24,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       setSession(session);
       if (!session) setLoading(false);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (!session) {
@@ -38,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     });
-
     return () => {
       mounted = false;
       subscription.unsubscribe();
@@ -53,37 +50,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     setLoading(true);
     (async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
         .maybeSingle();
       if (!active) return;
-      if (error) {
-        setProfile(null);
-      } else if (data) {
+      if (data) {
         setProfile(data as Profile);
       } else {
-        // Auto-create a profile row for users who signed up but lack one.
-        const meta = session.user.user_metadata as { full_name?: string };
-        const newProfile = {
+        setProfile({
           id: session.user.id,
-          full_name: meta?.full_name ?? '',
-          role: 'viewer' as const,
+          full_name: session.user.email ?? '',
+          role: 'general_user',
           department: '',
-        };
-        const { data: created } = await supabase
-          .from('profiles')
-          .insert(newProfile)
-          .select('*')
-          .maybeSingle();
-        if (active && created) setProfile(created as Profile);
+          created_at: new Date().toISOString(),
+        } as Profile);
       }
       if (active) setLoading(false);
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [session]);
 
   const signIn = async (email: string, password: string) => {
@@ -98,14 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { data: { full_name: fullName } },
     });
     if (error) return { error: error.message };
-    if (data.user) {
-      await supabase.from('profiles').insert({
-        id: data.user.id,
-        full_name: fullName,
-        role: 'viewer',
-        department: '',
-      });
-    }
     return { error: null };
   };
 
@@ -117,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, signIn, signUp, signOut }}
+      value={{ session, user: session?.user ?? null, profile, loading, signIn, signOut, signUp }}
     >
       {children}
     </AuthContext.Provider>

@@ -44,77 +44,83 @@ export function useDashboardData(): DashboardData {
     setLoading(true);
     const isAdmin = profile?.role === 'admin';
 
-    // Fetch documents directly from the documents table
-    const { data: dbDocs } = await supabase
-      .from('documents')
-      .select('*')
-      .order('upload_date', { ascending: false });
+    try {
+      const { data: dbDocs } = await supabase
+        .from('documents')
+        .select('*')
+        .order('upload_date', { ascending: false });
 
-    const docs: Document[] = (dbDocs ?? []).map((d) => ({
-      id: d.id,
-      title: d.title,
-      version: String(d.version ?? 1),
-      file_url: d.file_url ?? '',
-      status: d.status ?? 'active',
-      uploaded_at: d.upload_date ?? d.created_at ?? new Date().toISOString(),
-      expires_at: d.next_review_date ?? null,
-      uploaded_by: d.uploaded_by ?? null,
-      created_at: d.upload_date ?? new Date().toISOString(),
-      storage_path: d.storage_path ?? undefined,
-      category: d.storage_path
-        ? extractCategory(d.storage_path.split('/')[0])
-        : undefined,
-    }));
-
-    // Fetch signatures and alerts
-    const [sigsRes, alertsRes, allSigsRes] = await Promise.all([
-      supabase.from('signatures').select('*').eq('user_id', user.id),
-      supabase.from('alerts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-      isAdmin ? supabase.from('signatures').select('*') : null,
-    ]);
-
-    const mySigs = sigsRes.data ?? [];
-    const sigDocIds = new Set(mySigs.map((s) => s.document_id));
-
-    const requiredSignersList: DocumentRequiredSigner[] = docs
-      .filter((doc) => !sigDocIds.has(doc.id))
-      .map((doc) => ({
-        id: crypto.randomUUID(),
-        document_id: doc.id,
-        user_id: user.id,
-        created_at: new Date().toISOString(),
+      const docs: Document[] = (dbDocs ?? []).map((d) => ({
+        id: d.id,
+        title: d.title,
+        version: String(d.version ?? 1),
+        file_url: d.file_url ?? '',
+        status: d.status ?? 'active',
+        uploaded_at: d.upload_date ?? d.created_at ?? new Date().toISOString(),
+        expires_at: d.next_review_date ?? null,
+        uploaded_by: d.uploaded_by ?? null,
+        created_at: d.upload_date ?? new Date().toISOString(),
+        storage_path: d.storage_path ?? undefined,
+        category: d.storage_path
+          ? extractCategory(d.storage_path.split('/')[0])
+          : undefined,
       }));
 
-    const existingAlertDocIds = new Set((alertsRes.data ?? []).map((a) => a.document_id));
-    const newAlerts = docs
-      .filter((doc) => !sigDocIds.has(doc.id) && !existingAlertDocIds.has(doc.id))
-      .map((doc) => ({
-        document_id: doc.id,
-        user_id: user.id,
-        type: 'signature_required' as const,
-        message: `Your signature is required on "${doc.title}" (Version ${doc.version}).`,
-      }));
+      setDocuments(docs);
 
-    if (newAlerts.length > 0) {
+      const [sigsRes, alertsRes, allSigsRes] = await Promise.all([
+        supabase.from('signatures').select('*').eq('user_id', user.id),
+        supabase.from('alerts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        isAdmin ? supabase.from('signatures').select('*') : null,
+      ]);
+
+      const mySigs = sigsRes.data ?? [];
+      const sigDocIds = new Set(mySigs.map((s) => s.document_id));
+
+      const requiredSignersList: DocumentRequiredSigner[] = docs
+        .filter((doc) => !sigDocIds.has(doc.id))
+        .map((doc) => ({
+          id: crypto.randomUUID(),
+          document_id: doc.id,
+          user_id: user.id,
+          created_at: new Date().toISOString(),
+        }));
+
       try {
-        await supabase.from('alerts').insert(newAlerts);
+        const existingAlertDocIds = new Set((alertsRes.data ?? []).map((a) => a.document_id));
+        const newAlerts = docs
+          .filter((doc) => !sigDocIds.has(doc.id) && !existingAlertDocIds.has(doc.id))
+          .map((doc) => ({
+            document_id: doc.id,
+            user_id: user.id,
+            alert_type: 'signature_required',
+            status: 'pending',
+            scheduled_for: new Date().toISOString(),
+            message: `Your signature is required on "${doc.title}" (Version ${doc.version}).`,
+          }));
+
+        if (newAlerts.length > 0) {
+          await supabase.from('alerts').insert(newAlerts);
+        }
       } catch {
-        // Ignore errors
+        // Ignore alert errors
       }
+
+      const { data: updatedAlerts } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      setMySignatures(mySigs);
+      setMyAlerts(updatedAlerts ?? alertsRes.data ?? []);
+      setRequiredSigners(requiredSignersList);
+      if (allSigsRes) setAllSignatures(allSigsRes.data ?? []);
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+    } finally {
+      setLoading(false);
     }
-
-    const { data: updatedAlerts } = await supabase
-      .from('alerts')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    setDocuments(docs);
-    setMySignatures(mySigs);
-    setMyAlerts(updatedAlerts ?? alertsRes.data ?? []);
-    setRequiredSigners(requiredSignersList);
-    if (allSigsRes) setAllSignatures(allSigsRes.data ?? []);
-    setLoading(false);
   }, [user, profile]);
 
   useEffect(() => {

@@ -21,10 +21,7 @@ interface AlertsSectionProps {
   onAlertsMoreClick?: () => void;
 }
 
-const alertConfig: Record<
-  Alert['type'],
-  { icon: typeof Bell; color: string; bg: string; label: string }
-> = {
+const alertConfig: Record<string, { icon: any; color: string; bg: string; label: string }> = {
   signature_required: {
     icon: FileSignature,
     color: 'text-accent',
@@ -32,6 +29,12 @@ const alertConfig: Record<
     label: 'Signature Required',
   },
   expiring: {
+    icon: Clock,
+    color: 'text-warning',
+    bg: 'bg-warning/10',
+    label: 'Expiring Soon',
+  },
+  expiring_soon: {
     icon: Clock,
     color: 'text-warning',
     bg: 'bg-warning/10',
@@ -48,6 +51,18 @@ const alertConfig: Record<
     color: 'text-secondary',
     bg: 'bg-secondary/10',
     label: 'Up for Review',
+  },
+  review_due: {
+    icon: RefreshCw,
+    color: 'text-secondary',
+    bg: 'bg-secondary/10',
+    label: 'Up for Review',
+  },
+  new_version_published: {
+    icon: Bell,
+    color: 'text-primary',
+    bg: 'bg-primary/10',
+    label: 'New Version',
   },
 };
 
@@ -109,7 +124,7 @@ export function AlertsSection({ alerts, documents, onRefresh, compact, onAlertsM
           ) : (
             <div className="space-y-3">
               {visible.map((alert) => {
-                const cfg = alertConfig[alert.type];
+                const cfg = alertConfig[alert.type] ?? alertConfig['signature_required'];
                 const Icon = cfg.icon;
                 const doc = alert.document_id ? docMap.get(alert.document_id) : null;
                 const isSigRequired = alert.type === 'signature_required' && doc;

@@ -37,18 +37,9 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
       setError('No PDF file linked to this document yet.');
       return;
     }
-    setLoading(true);
-    supabase.storage
-      .from('Documents')
-      .createSignedUrl(document.storage_path, 3600)
-      .then(({ data, error }) => {
-        if (error || !data) {
-          setError('Could not load PDF. Please try again.');
-        } else {
-          setPdfUrl(data.signedUrl);
-        }
-        setLoading(false);
-      });
+    const publicUrl = `https://upifirvxrusitxhpzwpy.supabase.co/storage/v1/object/public/Documents/${encodeURIComponent(document.storage_path).replace(/%2F/g, '/')}`;
+    setPdfUrl(publicUrl);
+    setLoading(false);
   }, [open, document]);
 
   const handleScroll = () => {

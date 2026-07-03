@@ -31,6 +31,7 @@ interface DocumentsTableProps {
 }
 
 function statusBadge(status: Document['status']) {
+  console.log('status value:', status);
 const map: Record<string, { label: string; className: string; icon: any }> = {
     active: { label: 'Active', className: 'bg-success/10 text-success', icon: CheckCircle2 },
     expired: { label: 'Expired', className: 'bg-destructive/10 text-destructive', icon: XCircle },

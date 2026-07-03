@@ -67,7 +67,7 @@ export function useDashboardData(): DashboardData {
       .from('documents')
       .select('*')
       .order('uploaded_at', { ascending: false });
-
+console.log('Documents fetched:', dbDocs, 'User:', user?.id);
     const docs: Document[] = (dbDocs ?? []).map((d) => ({
       id: d.id,
       title: d.title,

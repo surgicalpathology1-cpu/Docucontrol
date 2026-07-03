@@ -15,17 +15,6 @@ interface DashboardData {
   refresh: () => void;
 }
 
-const STORAGE_FOLDERS = [
-  '01_Standard_Operating_Procedures',
-  '02_Quality_Control',
-  '03_Safety_and_Compliance',
-  '04_Equipment_and_Maintenance',
-  '05_Administrative_and_HR',
-  '06_Accreditation_and_Regulatory',
-  '07_Forms_and_Logs',
-  '08_Uncategorized',
-];
-
 const CATEGORY_MAP: Record<string, string> = {
   '01_Standard_Operating_Procedures': 'Standard Operating Procedures',
   '02_Quality_Control': 'Quality Control',
@@ -39,13 +28,6 @@ const CATEGORY_MAP: Record<string, string> = {
 
 function extractCategory(folder: string): string {
   return CATEGORY_MAP[folder] || folder.replace(/^\d+_/, '').replace(/_/g, ' ');
-}
-
-function fileStatus(filename: string): Document['status'] {
-  const lower = filename.toLowerCase();
-  if (lower.includes('expired') || lower.includes('deprecated')) return 'expired';
-  if (lower.includes('review') || lower.includes('draft')) return 'under_review';
-  return 'active';
 }
 
 export function useDashboardData(): DashboardData {
@@ -62,66 +44,29 @@ export function useDashboardData(): DashboardData {
     setLoading(true);
     const isAdmin = profile?.role === 'admin';
 
-    // Fetch documents from the database table
+    // Fetch documents directly from the documents table
     const { data: dbDocs } = await supabase
       .from('documents')
       .select('*')
-      .order('uploaded_at', { ascending: false });
+      .order('upload_date', { ascending: false });
 
     const docs: Document[] = (dbDocs ?? []).map((d) => ({
       id: d.id,
       title: d.title,
-      version: d.version,
+      version: String(d.version ?? 1),
       file_url: d.file_url ?? '',
-      status: d.status,
-      uploaded_at: d.uploaded_at,
-      expires_at: d.expires_at,
-      uploaded_by: d.uploaded_by,
-      created_at: d.created_at,
+      status: d.status ?? 'active',
+      uploaded_at: d.upload_date ?? d.created_at ?? new Date().toISOString(),
+      expires_at: d.next_review_date ?? null,
+      uploaded_by: d.uploaded_by ?? null,
+      created_at: d.upload_date ?? new Date().toISOString(),
       storage_path: d.storage_path ?? undefined,
-      category: d.category ?? undefined,
+      category: d.storage_path
+        ? extractCategory(d.storage_path.split('/')[0])
+        : undefined,
     }));
 
-    // Also load any files from storage folders that aren't in the DB
-    const folderPromises = STORAGE_FOLDERS.map((folder) =>
-      supabase.storage.from('Documents').list(folder, { limit: 500 })
-    );
-
-    const folderResults = await Promise.all(folderPromises);
-
-    const existingPaths = new Set(docs.map((d) => d.storage_path));
-
-    for (let i = 0; i < folderResults.length; i++) {
-      const folder = STORAGE_FOLDERS[i];
-      const result = folderResults[i];
-      const files = (result.data ?? []).filter(
-        (f) => f.name && !f.name.startsWith('.') && f.name.toLowerCase().endsWith('.pdf')
-      );
-
-      for (const file of files) {
-        const storagePath = `${folder}/${file.name}`;
-        if (existingPaths.has(storagePath)) continue;
-
-        docs.push({
-          id: storagePath,
-          title: file.name.replace(/\.pdf$/i, ''),
-          version: 'v1.0',
-          file_url: '',
-          status: fileStatus(file.name),
-          uploaded_at: file.created_at ?? new Date().toISOString(),
-          expires_at: null,
-          uploaded_by: null,
-          created_at: file.created_at ?? new Date().toISOString(),
-          storage_path: storagePath,
-          category: extractCategory(folder),
-        });
-      }
-    }
-
-    // Sort documents by upload date
-    docs.sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
-
-    // Fetch signatures and alerts from database
+    // Fetch signatures and alerts
     const [sigsRes, alertsRes, allSigsRes] = await Promise.all([
       supabase.from('signatures').select('*').eq('user_id', user.id),
       supabase.from('alerts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
@@ -131,7 +76,6 @@ export function useDashboardData(): DashboardData {
     const mySigs = sigsRes.data ?? [];
     const sigDocIds = new Set(mySigs.map((s) => s.document_id));
 
-    // Create required signers list - documents that haven't been signed yet
     const requiredSignersList: DocumentRequiredSigner[] = docs
       .filter((doc) => !sigDocIds.has(doc.id))
       .map((doc) => ({
@@ -141,7 +85,6 @@ export function useDashboardData(): DashboardData {
         created_at: new Date().toISOString(),
       }));
 
-    // Create alerts for documents that need signatures
     const existingAlertDocIds = new Set((alertsRes.data ?? []).map((a) => a.document_id));
     const newAlerts = docs
       .filter((doc) => !sigDocIds.has(doc.id) && !existingAlertDocIds.has(doc.id))
@@ -156,11 +99,10 @@ export function useDashboardData(): DashboardData {
       try {
         await supabase.from('alerts').insert(newAlerts);
       } catch {
-        // Ignore errors - alerts may already exist
+        // Ignore errors
       }
     }
 
-    // Refetch alerts after inserting
     const { data: updatedAlerts } = await supabase
       .from('alerts')
       .select('*')

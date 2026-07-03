@@ -36,7 +36,7 @@ function statusBadge(status: Document['status']) {
     expired: { label: 'Expired', className: 'bg-destructive/10 text-destructive', icon: XCircle },
     under_review: { label: 'Under Review', className: 'bg-warning/10 text-warning', icon: Clock },
   } as const;
-  const cfg = map[status];
+  const cfg = map[status] ?? map['active'];
   const Icon = cfg.icon;
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium', cfg.className)}>

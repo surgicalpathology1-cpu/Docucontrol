@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'signer' | 'viewer';
+export type UserRole = 'admin' | 'reviewer' | 'general_user' | 'signer' | 'viewer';
 
 export interface Profile {
   id: string;

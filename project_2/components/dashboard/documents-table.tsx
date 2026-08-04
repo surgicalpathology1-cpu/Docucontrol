@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,11 +14,41 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FileText, Search, PenLine, CheckCircle2, Clock, XCircle, Filter, X } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { FileText, Search, PenLine, CheckCircle2, Clock, XCircle, Filter, X, Upload, Loader2 } from 'lucide-react';
 import type { Document, Signature, DocumentRequiredSigner } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase/client';
 import { SignDocumentDialog } from '@/components/dashboard/sign-document-dialog';
 import type { DocFilter } from './dashboard-shell';
+
+const CATEGORIES = [
+  '01_Standard_Operating_Procedures',
+  '02_Quality_Control',
+  '03_Safety_and_Compliance',
+  '04_Equipment_and_Maintenance',
+  '05_Administrative_and_HR',
+  '06_Accreditation_and_Regulatory',
+  '07_Forms_and_Logs',
+  '08_Uncategorized',
+];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  '01_Standard_Operating_Procedures': 'Standard Operating Procedures',
+  '02_Quality_Control': 'Quality Control',
+  '03_Safety_and_Compliance': 'Safety and Compliance',
+  '04_Equipment_and_Maintenance': 'Equipment and Maintenance',
+  '05_Administrative_and_HR': 'Administrative and HR',
+  '06_Accreditation_and_Regulatory': 'Accreditation and Regulatory',
+  '07_Forms_and_Logs': 'Forms and Logs',
+  '08_Uncategorized': 'Uncategorized',
+};
 
 interface DocumentsTableProps {
   documents: Document[];
@@ -31,8 +61,7 @@ interface DocumentsTableProps {
 }
 
 function statusBadge(status: Document['status']) {
-  console.log('status value:', status);
-const map: Record<string, { label: string; className: string; icon: any }> = {
+  const map: Record<string, { label: string; className: string; icon: any }> = {
     active: { label: 'Active', className: 'bg-success/10 text-success', icon: CheckCircle2 },
     expired: { label: 'Expired', className: 'bg-destructive/10 text-destructive', icon: XCircle },
     under_review: { label: 'Under Review', className: 'bg-warning/10 text-warning', icon: Clock },
@@ -60,6 +89,7 @@ function sigStatus(doc: Document, sigs: Signature[], required: DocumentRequiredS
   }
   return { label: 'Not required', className: 'bg-muted text-muted-foreground', icon: FileText };
 }
+
 const filterLabels: Record<DocFilter, string> = {
   all: 'All Documents',
   expired: 'Expired Documents',
@@ -67,10 +97,172 @@ const filterLabels: Record<DocFilter, string> = {
   under_review: 'Under Review',
 };
 
+function UploadDialog({ open, onOpenChange, onUploaded, userId }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onUploaded: () => void;
+  userId: string;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [version, setVersion] = useState('1');
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => {
+    setFile(null);
+    setTitle('');
+    setCategory(CATEGORIES[0]);
+    setVersion('1');
+    setError(null);
+  };
+
+  const handleUpload = async () => {
+    if (!file || !title.trim()) {
+      setError('Please select a file and enter a title.');
+      return;
+    }
+    setUploading(true);
+    setError(null);
+
+    const storagePath = `${category}/${file.name}`;
+
+    // Upload file to Supabase Storage
+    const { error: storageError } = await supabase.storage
+      .from('Documents')
+      .upload(storagePath, file, { upsert: true });
+
+    if (storageError) {
+      setError(`Upload failed: ${storageError.message}`);
+      setUploading(false);
+      return;
+    }
+
+    // Insert document record
+    const nextReview = new Date();
+    nextReview.setFullYear(nextReview.getFullYear() + 1);
+
+    const { error: dbError } = await supabase.from('documents').insert({
+      title: title.trim(),
+      storage_path: storagePath,
+      version: parseInt(version) || 1,
+      status: 'active',
+      uploaded_by: userId,
+      next_review_date: nextReview.toISOString().split('T')[0],
+    });
+
+    if (dbError) {
+      setError(`Database error: ${dbError.message}`);
+      setUploading(false);
+      return;
+    }
+
+    setUploading(false);
+    reset();
+    onOpenChange(false);
+    onUploaded();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Upload Document</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 py-2">
+          {/* File picker */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">PDF File</label>
+            <div
+              onClick={() => fileRef.current?.click()}
+              className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+            >
+              {file ? (
+                <p className="text-sm font-medium text-primary">{file.name}</p>
+              ) : (
+                <>
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Click to select a PDF file</p>
+                </>
+              )}
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Document Title</label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Sample Handling Procedure"
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Version */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Version</label>
+            <Input
+              value={version}
+              onChange={(e) => setVersion(e.target.value)}
+              placeholder="1"
+              type="number"
+              min="1"
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>
+            Cancel
+          </Button>
+          <Button onClick={handleUpload} disabled={uploading}>
+            {uploading ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Uploading...</>
+            ) : (
+              <><Upload className="mr-2 h-4 w-4" />Upload</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function DocumentsTable({ documents, mySignatures, requiredSigners, onRefresh, compact, filter = 'all', onClearFilter }: DocumentsTableProps) {
+  const { profile, user } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const [search, setSearch] = useState('');
   const [signDoc, setSignDoc] = useState<Document | null>(null);
   const [signOpen, setSignOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const filtered = useMemo(() => {
     let result = documents;
@@ -81,12 +273,11 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
     } else if (filter === 'pending_signature') {
       const pendingDocIds = new Set(
         requiredSigners
-          .filter((r) => !mySignatures.some((s) => s.document_id === r.document_id && s.status === 'signed'))
+          .filter((r) => !mySignatures.some((s) => s.document_id === r.document_id))
           .map((r) => r.document_id)
       );
       result = result.filter((d) => pendingDocIds.has(d.id));
     }
-
     const q = search.toLowerCase().trim();
     if (q) {
       result = result.filter(
@@ -115,12 +306,7 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
             {!compact && (
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 {filter !== 'all' && onClearFilter && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onClearFilter}
-                    className="h-9 shrink-0"
-                  >
+                  <Button variant="outline" size="sm" onClick={onClearFilter} className="h-9 shrink-0">
                     <Filter className="mr-1.5 h-3.5 w-3.5" />
                     {filterLabels[filter]}
                     <X className="ml-1.5 h-3.5 w-3.5" />
@@ -135,6 +321,12 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
                     className="pl-9"
                   />
                 </div>
+                {isAdmin && (
+                  <Button size="sm" onClick={() => setUploadOpen(true)} className="shrink-0">
+                    <Upload className="mr-1.5 h-4 w-4" />
+                    Upload
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -215,10 +407,7 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                setSignDoc(doc);
-                                setSignOpen(true);
-                              }}
+                              onClick={() => { setSignDoc(doc); setSignOpen(true); }}
                               className="border-accent/30 text-accent hover:bg-accent hover:text-accent-foreground"
                             >
                               <PenLine className="mr-1.5 h-3.5 w-3.5" />
@@ -251,6 +440,15 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
         onOpenChange={setSignOpen}
         onSigned={onRefresh}
       />
+
+      {user && (
+        <UploadDialog
+          open={uploadOpen}
+          onOpenChange={setUploadOpen}
+          onUploaded={onRefresh}
+          userId={user.id}
+        />
+      )}
     </section>
   );
 }

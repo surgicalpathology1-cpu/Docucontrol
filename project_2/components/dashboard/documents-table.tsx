@@ -365,11 +365,15 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
                     const canSign = sig.label === 'Pending your signature';
                     return (
                       <TableRow key={doc.id} className="group">
-                        <TableCell className="font-medium text-foreground">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/5 text-primary">
-                              <FileText className="h-4 w-4" />
-                            </div>
+                       <TableCell className="font-medium text-foreground">
+                        <div className="flex items-center gap-3">
+                          <div 
+                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/5 text-primary cursor-pointer hover:bg-primary/20 transition-colors"
+                           onClick={() => { setSignDoc(doc); setSignOpen(true); }}
+                           title="View document"
+                         >
+                           <FileText className="h-4 w-4" />
+                          </div>
                             <div className="min-w-0">
                               <p className="truncate">{doc.title}</p>
                               {doc.expires_at && (
@@ -413,8 +417,21 @@ export function DocumentsTable({ documents, mySignatures, requiredSigners, onRef
                               <PenLine className="mr-1.5 h-3.5 w-3.5" />
                               Sign Now
                             </Button>
-                          ) : sig.label === 'Signed' ? (
-                            <span className="text-xs text-muted-foreground">Completed</span>
+                        ) : sig.label === 'Signed' ? (
+  <div className="flex items-center justify-end gap-2">
+    <span className="inline-flex items-center gap-1 text-xs text-success font-medium">
+      <CheckCircle2 className="h-3 w-3" />
+      Signed
+    </span>
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={() => { setSignDoc(doc); setSignOpen(true); }}
+      className="text-xs h-7 px-2"
+    >
+      View
+    </Button>
+  </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}

@@ -16,14 +16,15 @@ interface SignDocumentDialogProps {
 }
 
 export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: SignDocumentDialogProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
-  const [hasSignature, setHasSignature] = useState(false);
+  const [hasDrawnSignature, setHasDrawnSignature] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,21 +37,30 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
       setSigned(false);
       setScrolledToBottom(false);
       setShowSignaturePad(false);
-      setHasSignature(false);
+      setHasDrawnSignature(false);
       setError(null);
       return;
     }
+
+    // Load signature image if profile has one
+    if ((profile as any)?.signature_url) {
+      const sigPath = (profile as any).signature_url;
+      const url = `https://upifirvxrusitxhpzwpy.supabase.co/storage/v1/object/public/Documents/${encodeURIComponent(sigPath).replace(/%2F/g, '/')}`;
+      setSignatureUrl(url);
+    } else {
+      setSignatureUrl(null);
+    }
+
     if (!document.storage_path) {
       setError('No PDF file linked to this document yet.');
       return;
     }
-    setLoading(true);
+
     const publicUrl = `https://upifirvxrusitxhpzwpy.supabase.co/storage/v1/object/public/Documents/${encodeURIComponent(document.storage_path).replace(/%2F/g, '/')}`;
     setPdfUrl(publicUrl);
-    setLoading(false);
-  }, [open, document]);
+  }, [open, document, profile]);
 
-  // Initialize canvas when signature pad shows
+  // Initialize canvas
   useEffect(() => {
     if (!showSignaturePad || !canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -99,7 +109,7 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
       ctx.moveTo(lastPos.current.x, lastPos.current.y);
       ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
-      setHasSignature(true);
+      setHasDrawnSignature(true);
     }
     lastPos.current = pos;
   };
@@ -109,14 +119,14 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
     lastPos.current = null;
   };
 
-  const clearSignature = () => {
+  const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    setHasSignature(false);
+    setHasDrawnSignature(false);
   };
 
   const handleScroll = () => {
@@ -146,6 +156,8 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
     }
   };
 
+  const hasSignature = signatureUrl || hasDrawnSignature;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 gap-0">
@@ -158,20 +170,13 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto relative"
         >
-          {loading && (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">Loading PDF...</span>
-            </div>
-          )}
-
-          {error && (
+          {error && !pdfUrl && (
             <div className="flex items-center justify-center h-full text-center px-8">
               <p className="text-muted-foreground">{error}</p>
             </div>
           )}
 
-          {pdfUrl && !loading && (
+          {pdfUrl && (
             <iframe
               src={pdfUrl}
               className="w-full"
@@ -190,7 +195,7 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
           )}
         </div>
 
-        {/* Attestation + Signature Bar */}
+        {/* Bottom signing bar */}
         <div className="border-t px-6 py-4 bg-muted/30">
           {signed ? (
             <div className="flex items-center justify-center gap-2 text-green-600 py-2">
@@ -215,54 +220,75 @@ export function SignDocumentDialog({ document, open, onOpenChange, onSigned }: S
               <p className="text-xs text-muted-foreground">
                 By signing below, I attest that I have read, understood, and agree to abide by this policy.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-                <div className="flex flex-col gap-1 flex-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground">Draw your signature:</label>
-                    <button
-                      onClick={clearSignature}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Eraser className="h-3 w-3" />
-                      Clear
-                    </button>
+
+              {/* Show uploaded signature OR drawing pad */}
+              {signatureUrl ? (
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Your signature:</label>
+                    <div className="border border-border rounded-md bg-white px-4 py-2 inline-block">
+                      <img
+                        src={signatureUrl}
+                        alt="Signature"
+                        style={{ height: '60px', width: 'auto' }}
+                      />
+                    </div>
                   </div>
-                  <canvas
-                    ref={canvasRef}
-                    width={500}
-                    height={100}
-                    className="border border-border rounded-md bg-white cursor-crosshair w-full touch-none"
-                    style={{ maxWidth: '500px', height: '100px' }}
-                    onMouseDown={startDraw}
-                    onMouseMove={draw}
-                    onMouseUp={stopDraw}
-                    onMouseLeave={stopDraw}
-                    onTouchStart={startDraw}
-                    onTouchMove={draw}
-                    onTouchEnd={stopDraw}
-                  />
+                  <div className="flex gap-2 shrink-0 sm:ml-auto">
+                    <Button variant="outline" size="sm" onClick={() => setShowSignaturePad(false)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSign} disabled={signing}>
+                      {signing ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</>
+                      ) : (
+                        'Submit Signature'
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => { setShowSignaturePad(false); clearSignature(); }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSign}
-                    disabled={!hasSignature || signing}
-                  >
-                    {signing ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</>
-                    ) : (
-                      'Submit Signature'
-                    )}
-                  </Button>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-muted-foreground">Draw your signature:</label>
+                      <button
+                        onClick={clearCanvas}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <Eraser className="h-3 w-3" />
+                        Clear
+                      </button>
+                    </div>
+                    <canvas
+                      ref={canvasRef}
+                      width={500}
+                      height={100}
+                      className="border border-border rounded-md bg-white cursor-crosshair w-full touch-none"
+                      style={{ maxWidth: '500px', height: '100px' }}
+                      onMouseDown={startDraw}
+                      onMouseMove={draw}
+                      onMouseUp={stopDraw}
+                      onMouseLeave={stopDraw}
+                      onTouchStart={startDraw}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDraw}
+                    />
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button variant="outline" size="sm" onClick={() => { setShowSignaturePad(false); clearCanvas(); }}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSign} disabled={!hasDrawnSignature || signing}>
+                      {signing ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</>
+                      ) : (
+                        'Submit Signature'
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

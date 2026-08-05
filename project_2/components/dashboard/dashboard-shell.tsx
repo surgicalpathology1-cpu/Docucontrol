@@ -8,12 +8,11 @@ import { Header } from '@/components/dashboard/header';
 import { AlertsSection } from '@/components/dashboard/alerts-section';
 import { DocumentsTable } from '@/components/dashboard/documents-table';
 import { AdminStats } from '@/components/dashboard/admin-stats';
+import { ComplianceReport } from '@/components/dashboard/compliance-report';
 import { Loader2, ChevronRight, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { Document } from '@/lib/types';
 
-type Tab = 'overview' | 'alerts' | 'documents';
-
+type Tab = 'overview' | 'alerts' | 'documents' | 'compliance';
 export type DocFilter = 'all' | 'expired' | 'pending_signature' | 'under_review';
 
 const filterLabels: Record<DocFilter, string> = {
@@ -48,6 +47,20 @@ export function DashboardShell() {
 
   const showBreadcrumb = tab === 'documents' && filter !== 'all';
 
+  const tabTitles: Record<Tab, string> = {
+    overview: 'Compliance Overview',
+    alerts: 'Action Alerts',
+    documents: 'Document Library',
+    compliance: 'Compliance Report',
+  };
+
+  const tabDescriptions: Record<Tab, string> = {
+    overview: 'Your document control dashboard at a glance.',
+    alerts: 'Documents requiring your attention and signature.',
+    documents: 'All controlled documents with signature status.',
+    compliance: 'Full compliance summary for CAP inspection.',
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar profile={profile} activeTab={tab} onTabChange={setTab} unreadAlerts={unreadAlerts} />
@@ -60,7 +73,6 @@ export function DashboardShell() {
             </div>
           ) : (
             <div className="mx-auto max-w-7xl space-y-8 animate-fade-in">
-              {/* Breadcrumb / back button when filtered from stat card */}
               {showBreadcrumb && (
                 <div className="flex items-center gap-2 text-sm">
                   <Button
@@ -77,17 +89,12 @@ export function DashboardShell() {
                 </div>
               )}
 
-              {/* Page heading */}
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  {tab === 'overview' && 'Compliance Overview'}
-                  {tab === 'alerts' && 'Action Alerts'}
-                  {tab === 'documents' && 'Document Library'}
+                  {tabTitles[tab]}
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {tab === 'overview' && 'Your document control dashboard at a glance.'}
-                  {tab === 'alerts' && 'Documents requiring your attention and signature.'}
-                  {tab === 'documents' && 'All controlled documents with signature status.'}
+                  {tabDescriptions[tab]}
                 </p>
               </div>
 
@@ -117,6 +124,13 @@ export function DashboardShell() {
                   onRefresh={refresh}
                   filter={filter}
                   onClearFilter={handleClearFilter}
+                />
+              )}
+
+              {tab === 'compliance' && isAdmin && (
+                <ComplianceReport
+                  documents={documents}
+                  signatures={allSignatures}
                 />
               )}
             </div>

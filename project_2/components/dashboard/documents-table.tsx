@@ -159,6 +159,15 @@ function UploadDialog({ open, onOpenChange, onUploaded, userId }: {
       return;
     }
 
+  // Send email notification
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'signature_required', documentTitle: title.trim() }),
+      });
+    } catch {}
+
     setUploading(false);
     reset();
     onOpenChange(false);

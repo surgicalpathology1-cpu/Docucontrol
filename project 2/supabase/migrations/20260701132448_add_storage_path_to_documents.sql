@@ -1,1 +1,0 @@
-ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS storage_path text UNIQUE;

@@ -1,22 +1,24 @@
 'use client';
-
-import { ShieldCheck, LayoutDashboard, Bell, FileText, LogOut } from 'lucide-react';
+import { ShieldCheck, LayoutDashboard, Bell, FileText, LogOut, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { Profile } from '@/lib/types';
 
 interface SidebarProps {
   profile: Profile | null;
-  activeTab: 'overview' | 'alerts' | 'documents';
-  onTabChange: (tab: 'overview' | 'alerts' | 'documents') => void;
+  activeTab: 'overview' | 'alerts' | 'documents' | 'compliance';
+  onTabChange: (tab: 'overview' | 'alerts' | 'documents' | 'compliance') => void;
   unreadAlerts: number;
 }
 
 export function Sidebar({ profile, activeTab, onTabChange, unreadAlerts }: SidebarProps) {
+  const isAdmin = profile?.role === 'admin';
+
   const navItems = [
     { id: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
     { id: 'alerts' as const, label: 'Alerts', icon: Bell, badge: unreadAlerts },
     { id: 'documents' as const, label: 'Documents', icon: FileText },
+    ...(isAdmin ? [{ id: 'compliance' as const, label: 'Compliance Report', icon: ClipboardList }] : []),
   ];
 
   return (
@@ -27,7 +29,6 @@ export function Sidebar({ profile, activeTab, onTabChange, unreadAlerts }: Sideb
         </div>
         <span className="text-lg font-semibold tracking-tight text-foreground">DocuControl</span>
       </div>
-
       <nav className="flex-1 space-y-1 p-4">
         <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Menu
@@ -49,12 +50,10 @@ export function Sidebar({ profile, activeTab, onTabChange, unreadAlerts }: Sideb
               <Icon className="h-4 w-4" />
               <span className="flex-1 text-left">{item.label}</span>
               {item.badge ? (
-                <span
-                  className={cn(
-                    'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold',
-                    active ? 'bg-accent text-accent-foreground' : 'bg-accent/10 text-accent'
-                  )}
-                >
+                <span className={cn(
+                  'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold',
+                  active ? 'bg-accent text-accent-foreground' : 'bg-accent/10 text-accent'
+                )}>
                   {item.badge}
                 </span>
               ) : null}
@@ -62,7 +61,6 @@ export function Sidebar({ profile, activeTab, onTabChange, unreadAlerts }: Sideb
           );
         })}
       </nav>
-
       <div className="border-t border-border p-4">
         <div className="rounded-lg bg-muted/60 p-3">
           <p className="text-xs font-medium text-muted-foreground">Signed in as</p>

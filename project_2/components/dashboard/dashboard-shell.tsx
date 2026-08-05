@@ -58,7 +58,7 @@ export function DashboardShell() {
     overview: 'Your document control dashboard at a glance.',
     alerts: 'Documents requiring your attention and signature.',
     documents: 'All controlled documents with signature status.',
-    compliance: 'Full compliance summary for CAP inspection.',
+    compliance: 'Full compliance summary for CAP inspection',
   };
 
   return (
